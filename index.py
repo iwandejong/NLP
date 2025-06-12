@@ -353,13 +353,6 @@ def main():
                 # Remove extra whitespace
                 text = re.sub(r'\s+', ' ', text).strip()
                 
-                # Handle compound words (basic implementation)
-                if language == "af":
-                    # Split common Afrikaans compound words
-                    text = text.replace('vandag', 'van dag')
-                    text = text.replace('môre', 'mo re')
-                    text = text.replace('gesê', 'ge sê')
-                
                 # Simple tokenization and remove stopwords
                 tokens = text.split()
                 tokens = [token for token in tokens if token not in stop_words and len(token) > 2]
@@ -401,7 +394,7 @@ def main():
                 lda = LatentDirichletAllocation(
                     n_components=n_topics,
                     random_state=42,
-                    max_iter=20,    # Increased from 10
+                    max_iter=20,
                     learning_method='online',
                     learning_offset=50.0,
                     batch_size=128,
