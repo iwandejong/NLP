@@ -11,6 +11,10 @@ This script implements the complete pipeline described in the research paper:
 
 Requirements: transformers torch torchaudio datasets librosa jiwer scikit-learn gensim bertopic nltk matplotlib seaborn plotly sentence-transformers umap-learn hdbscan
 """
+# Set environment variable for tokenizers
+import os
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
+
 # * Modal Server Section
 import modal
 import pathlib
@@ -308,7 +312,8 @@ def main():
                         src_lang="afr_Latn", 
                         tgt_lang="eng_Latn"
                     )
-                    translations.append(result['translation_text'])
+                    # The pipeline returns a list of dictionaries, we need the first one
+                    translations.append(result[0]['translation_text'])
                     
                     if (i + 1) % 10 == 0:
                         print(f"Translated {i + 1}/{len(texts)} texts")
@@ -333,8 +338,7 @@ def main():
                     stop_words = set()
             
             for text in texts:
-                if not text.strip():
-                    processed_texts.append("")
+                if not text or not isinstance(text, str) or not text.strip():
                     continue
                 
                 # Convert to lowercase
@@ -360,7 +364,9 @@ def main():
                 tokens = text.split()
                 tokens = [token for token in tokens if token not in stop_words and len(token) > 2]
                 
-                processed_texts.append(' '.join(tokens))
+                # Only add if we have tokens after preprocessing
+                if tokens:
+                    processed_texts.append(' '.join(tokens))
             
             return processed_texts
         
@@ -368,11 +374,11 @@ def main():
             """Train LDA topic model with improved parameters"""
             print(f"Training LDA with {n_topics} topics...")
             
-            # Remove empty texts
-            texts = [text for text in texts if text.strip()]
+            # Remove empty texts and ensure we have valid strings
+            texts = [text for text in texts if text and isinstance(text, str) and text.strip()]
             
-            if len(texts) == 0:
-                print("No valid texts for LDA training")
+            if len(texts) < n_topics:
+                print(f"Not enough valid texts for {n_topics} topics. Need at least {n_topics} texts.")
                 return None, None
             
             # Vectorize texts with improved parameters
@@ -385,6 +391,11 @@ def main():
             
             try:
                 doc_term_matrix = vectorizer.fit_transform(texts)
+                
+                # Check if we have enough features
+                if doc_term_matrix.shape[1] < n_topics:
+                    print(f"Not enough features for {n_topics} topics. Need at least {n_topics} features.")
+                    return None, None
                 
                 # Train LDA with improved parameters
                 lda = LatentDirichletAllocation(
@@ -766,10 +777,15 @@ def main():
             print("\n2. TOPIC MODELING COHERENCE")
             print("-" * 50)
             af_coherence = metrics['coherence']['afrikaans']
+            en_coherence = metrics['coherence']['english']
             
             print("Afrikaans (Direct):")
             print(f"  UMass: {af_coherence['umass']:.3f}")
             print(f"  NPMI:  {af_coherence['npmi']:.3f}")
+            
+            print("\nEnglish (Translated):")
+            print(f"  UMass: {en_coherence['umass']:.3f}")
+            print(f"  NPMI:  {en_coherence['npmi']:.3f}")
             
             # Research Questions Answers
             print("\n3. RESEARCH QUESTIONS ANSWERS")
@@ -779,11 +795,17 @@ def main():
             print(f"    • Whisper achieves {metrics['wer']['whisper']:.1%} WER")
             print(f"    • Performance is {'good' if metrics['wer']['whisper'] < 0.3 else 'moderate'} for low-resource language")
             
+            print("\nQ2: How does topic modeling performance compare between original and translated texts?")
+            print(f"    • Afrikaans NPMI: {af_coherence['npmi']:.3f}")
+            print(f"    • English NPMI:  {en_coherence['npmi']:.3f}")
+            print(f"    • {'Better' if af_coherence['npmi'] > en_coherence['npmi'] else 'Worse'} coherence in original language")
+            
             print("\n4. RECOMMENDATIONS")
             print("-" * 50)
             print("• For production ASR systems: Use Whisper")
             print("• Future work: Collect more Afrikaans training data")
             print("• Consider domain-specific fine-tuning for better performance")
+            print("• Topic modeling works better on original language texts")
             
             print("\n" + "="*60)
         
