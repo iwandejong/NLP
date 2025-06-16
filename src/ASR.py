@@ -1,8 +1,9 @@
-from transformers import WhisperProcessor, WhisperForConditionalGeneration
+from transformers import WhisperProcessor, WhisperForConditionalGeneration, AutoProcessor, SeamlessM4Tv2ForSpeechToText
 import torch
 from jiwer import wer
 from typing import List, Dict
 from tqdm import tqdm
+from datasets import Audio
 
 class ASR:
   def __init__(self, model_name):
@@ -10,11 +11,12 @@ class ASR:
     self.whisper_model = WhisperForConditionalGeneration.from_pretrained(model_name)
     self.whisper_model.to("cuda" if torch.cuda.is_available() else "cpu")
 
+    self.m4tv2_model_id = "facebook/seamless-m4t-v2-large"
+    self.m4tv2_processor = AutoProcessor.from_pretrained(self.m4tv2_model_id)
+    self.m4tv2_model = SeamlessM4Tv2ForSpeechToText.from_pretrained(self.m4tv2_model_id)
+    self.m4tv2_model.to("cuda" if torch.cuda.is_available() else "cpu")
+
   def transcribe_whisper(self, audio_data: List[Dict]) -> List[str]:
-    """Transcribe audio using Whisper"""
-    if self.whisper_model is None:
-        self.load_whisper_model()
-    
     transcriptions = []
     print("Transcribing with Whisper...")
     
@@ -49,28 +51,40 @@ class ASR:
         )[0]
         
         transcriptions.append(transcription)
-          
-        if (i + 1) % 10 == 0:
-          print(f"Processed {i + 1}/{len(audio_data)} samples")
-              
       except Exception as e:
         print(f"Error transcribing sample {i}: {e}")
         transcriptions.append("")
     
     return transcriptions
   
+  def transcribe_m4tv2(self, audio_data: List[Dict]) -> List[str]:
+    transcriptions = []
+
+    for x in tqdm(audio_data, desc="Transcribing with M4T-V2", total=len(audio_data)):
+      inputs = self.m4tv2_processor(
+        audios=x['audio'],
+        sampling_rate=16000,
+        return_tensors="pt",
+        src_lang="afr"
+      ).to("cuda" if torch.cuda.is_available() else "cpu")
+
+      output_tokens = self.m4tv2_model.generate(**inputs, tgt_lang="afr")
+      transcription = self.m4tv2_processor.batch_decode(output_tokens, skip_special_tokens=True)[0]
+
+      transcriptions.append(transcription)
+    return transcriptions
+  
   def calculate_wer(self, reference_texts: List[str], hypothesis_texts: List[str]) -> float:
-            """Calculate Word Error Rate"""
-            total_wer = 0
-            valid_pairs = 0
-            
-            for ref, hyp in zip(reference_texts, hypothesis_texts):
-                if ref.strip() and hyp.strip():
-                    try:
-                        total_wer += wer(ref, hyp)
-                        valid_pairs += 1
-                    except Exception as e:
-                        print(f"Error calculating WER: {e}")
-                        continue
-            
-            return total_wer / valid_pairs if valid_pairs > 0 else 1.0
+    total_wer = 0
+    valid_pairs = 0
+    
+    for ref, hyp in zip(reference_texts, hypothesis_texts):
+      if ref.strip() and hyp.strip():
+        try:
+          total_wer += wer(ref, hyp)
+          valid_pairs += 1
+        except Exception as e:
+          print(f"Error calculating WER: {e}")
+          continue
+    
+    return total_wer / valid_pairs if valid_pairs > 0 else 1.0

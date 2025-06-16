@@ -1,4 +1,4 @@
-from transformers import M2M100ForConditionalGeneration, M2M100Tokenizer
+from transformers import M2M100ForConditionalGeneration, M2M100Tokenizer, pipeline as hf_pipeline
 import torch
 from typing import List
 from tqdm import tqdm
@@ -8,6 +8,12 @@ class Translate:
     self.m2m_tokenizer = M2M100Tokenizer.from_pretrained("facebook/m2m100_418M")
     self.m2m_model = M2M100ForConditionalGeneration.from_pretrained("facebook/m2m100_418M")
     self.m2m_model.to("cuda" if torch.cuda.is_available() else "cpu")
+
+    self.nllb_translator = hf_pipeline(
+      "translation", 
+      model="facebook/nllb-200-distilled-600M",
+      device=0 if torch.cuda.is_available() else -1
+    )
 
   def translate_m2m(self, texts: List[str]) -> List[str]:
     """Translate texts using M2M-100"""

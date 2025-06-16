@@ -23,9 +23,9 @@ class Topic:
     
     # Vectorize texts with improved parameters
     vectorizer = CountVectorizer(
-      min_df=1,
-      max_df=0.9,
-      ngram_range=(1, 2)
+      min_df=2,
+      max_df=0.7,
+      ngram_range=(1,1)
     )
     
     try:
@@ -40,10 +40,10 @@ class Topic:
       lda = LatentDirichletAllocation(
         n_components=n_topics,
         random_state=42,
-        max_iter=100,
-        learning_method='online',
-        learning_offset=50.0,
-        batch_size=32,
+        max_iter=200,
+        learning_method='batch',
+        learning_offset=10.0,
+        batch_size=4,
         n_jobs=-1
       )
       lda.fit(doc_term_matrix)

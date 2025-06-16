@@ -51,21 +51,24 @@ class Loader:
         return []
 
   def load_podcast_chunks(self, chunk_dir="podcast_chunks"):
-    """Load audio chunks from a directory, no reference transcript."""
-    import librosa, os
     audio_data = []
     for fname in tqdm(os.listdir(chunk_dir), desc="Loading podcast chunks"):
-      if fname.endswith(".mp3"):
-        path = os.path.join(chunk_dir, fname)
-        audio, sr = librosa.load(path, sr=16000)
-        audio_data.append({'audio': audio, 'sampling_rate': 16000, 'text': ""})
-    print(f"Loaded {len(audio_data)} podcast chunks from {chunk_dir}")
+        if fname.endswith(".mp3"):
+            path = os.path.join(chunk_dir, fname)
+            try:
+                audio, sr = librosa.load(path, sr=16000)
+                if audio is None or len(audio) == 0:
+                    continue
+                audio_data.append({'audio': audio, 'sampling_rate': 16000, 'text': ""})
+            except Exception as e:
+                print(f"Failed to load {fname}: {e}")
 
     # Select 10 random samples if more than 10
-    if len(audio_data) > 10:
-      import random
-      audio_data = random.sample(audio_data, 10)
-    if not audio_data:
-      print("No audio data found in the specified directory.")
-      return []
+    # if len(audio_data) > 10:
+    #     import random
+    #     audio_data = random.sample(audio_data, 10)
+    # if not audio_data:
+    #     print("No audio data found in the specified directory.")
+    #     return []
+
     return audio_data

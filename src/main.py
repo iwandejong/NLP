@@ -95,22 +95,22 @@ def main():
   print("Loading podcast chunks...")
   audio_data = loader.load_podcast_chunks(chunk_dir="/root/podcast_chunks")
 
-  print("Transcribing audio with Whisper...")
-  whisper_transcripts = asr.transcribe_whisper(audio_data)
+  print("Transcribing audio...")
+  # transcripts = asr.transcribe_whisper(audio_data)
+  transcripts = asr.transcribe_m4tv2(audio_data)
 
   results['asr_results'] = {
-    'whisper': whisper_transcripts,
+    'whisper': transcripts,
   }
 
-  print("Translating Whisper transcripts to English using M2M-100...")
-  m2m_translations = translate.translate_m2m(whisper_transcripts)
+  translations = translate.translate_nllb(transcripts)
   
   results['translation_results'] = {
-    'm2m': m2m_translations,
+    'nllb': translations,
   }
 
-  processed_af = preprocess.preprocess_text(whisper_transcripts, language="af")
-  processed_en = preprocess.preprocess_text(m2m_translations, language="en")
+  processed_af = preprocess.preprocess_text(transcripts, language="af")
+  processed_en = preprocess.preprocess_text(translations, language="en")
 
   if len(processed_af) == 0 or len(processed_en) == 0:
     print("No valid documents after preprocessing. Exiting pipeline.")
@@ -123,13 +123,44 @@ def main():
   print(f"English: Average words per doc: {avg_len_en:.2f}")
 
   # Train LDA models
-  lda_af, vectorizer_af = topic.train_lda(processed_af, n_topics=2)
-  lda_en, vectorizer_en = topic.train_lda(processed_en, n_topics=2)
+  lda_af, vectorizer_af = topic.train_lda(processed_af, n_topics=5)
+  lda_en, vectorizer_en = topic.train_lda(processed_en, n_topics=5)
 
   # Train BERTopic models
   bertopic_af = topic.train_bertopic(processed_af)
   bertopic_en = topic.train_bertopic(processed_en)
-  
+
+  # Print the topics for LDA models
+  if lda_af:
+    print("\nLDA Topics for Afrikaans:")
+    lda_af_topics = []
+    for idx, topics in enumerate(lda_af.components_):
+      terms = [vectorizer_af.get_feature_names_out()[i] for i in topics.argsort()[-10:]]
+      print(f"Topic {idx}: {', '.join(terms)}")
+      lda_af_topics.append({
+        'topic': idx,
+        'terms': terms
+      })
+
+  if lda_en:
+    print("\nLDA Topics for English:")
+    lda_en_topics = []
+    for idx, topics in enumerate(lda_en.components_):
+      terms = [vectorizer_en.get_feature_names_out()[i] for i in topics.argsort()[-10:]]
+      print(f"Topic {idx}: {', '.join(terms)}")
+      lda_en_topics.append({
+        'topic': idx,
+        'terms': terms
+      })
+
+  if bertopic_af:
+    print("\nBERTopic Topics for Afrikaans:")
+    print(bertopic_af.get_topic_info())
+
+  if bertopic_en:
+    print("\nBERTopic Topics for English:")
+    print(bertopic_en.get_topic_info())
+
   # Calculate coherence scores for LDA models
   coherence_af = topic.calculate_lda_topic_coherence(processed_af, lda_af, vectorizer_af)
   coherence_en = topic.calculate_lda_topic_coherence(processed_en, lda_en, vectorizer_en)
@@ -138,20 +169,21 @@ def main():
   bertopic_coherence_af = topic.calculate_bertopic_topic_coherence(processed_af, bertopic_af)
   bertopic_coherence_en = topic.calculate_bertopic_topic_coherence(processed_en, bertopic_en)
 
+  # Save to topic_results
   results['topic_results'] = {
     'lda': {
-      'afrikaans': {'umass': coherence_af['umass'], 'npmi': coherence_af['npmi']},
-      'english': {'umass': coherence_en['umass'], 'npmi': coherence_en['npmi']}
+      'afrikaans': lda_af_topics,
+      'english': lda_en_topics
     },
     'bertopic': {
-      'afrikaans': {'umass': bertopic_coherence_af['umass'], 'npmi': bertopic_coherence_af['npmi']},
-      'english': {'umass': bertopic_coherence_en['umass'], 'npmi': bertopic_coherence_en['npmi']}
+      'afrikaans': bertopic_af.get_topic_info().to_dict(orient='records'),
+      'english': bertopic_en.get_topic_info().to_dict(orient='records')
     }
   }
   
   # Store evaluation metrics
   results['evaluation_metrics'] = {
-    'coherence': {
+    'lda': {
       'afrikaans': {
         'umass': coherence_af['umass'],
         'npmi': coherence_af['npmi']
@@ -159,6 +191,16 @@ def main():
       'english': {
         'umass': coherence_en['umass'],
         'npmi': coherence_en['npmi']
+      }
+    },
+    'bertopic': {
+      'afrikaans': {
+        'umass': bertopic_coherence_af['umass'],
+        'npmi': bertopic_coherence_af['npmi']
+      },
+      'english': {
+        'umass': bertopic_coherence_en['umass'],
+        'npmi': bertopic_coherence_en['npmi']
       }
     }
   }
@@ -172,11 +214,11 @@ def main():
   print("-" * 50)
   
   print("LDA Coherence:")
-  print(f"    • Afrikaans: UMass={results['topic_results']['lda']['afrikaans']['umass']:.3f}, NPMI={results['topic_results']['lda']['afrikaans']['npmi']:.3f}")
-  print(f"    • English:  UMass={results['topic_results']['lda']['english']['umass']:.3f}, NPMI={results['topic_results']['lda']['english']['npmi']:.3f}")
+  print(f"    • Afrikaans: UMass={results['evaluation_metrics']['lda']['afrikaans']['umass']:.3f}, NPMI={results['evaluation_metrics']['lda']['afrikaans']['npmi']:.3f}")
+  print(f"    • English:  UMass={results['evaluation_metrics']['lda']['english']['umass']:.3f}, NPMI={results['evaluation_metrics']['lda']['english']['npmi']:.3f}")
   print("BERTopic Coherence:")
-  print(f"    • Afrikaans: UMass={results['topic_results']['bertopic']['afrikaans']['umass']:.3f}, NPMI={results['topic_results']['bertopic']['afrikaans']['npmi']:.3f}")
-  print(f"    • English:  UMass={results['topic_results']['bertopic']['english']['umass']:.3f}, NPMI={results['topic_results']['bertopic']['english']['npmi']:.3f}")
+  print(f"    • Afrikaans: UMass={results['evaluation_metrics']['bertopic']['afrikaans']['umass']:.3f}, NPMI={results['evaluation_metrics']['bertopic']['afrikaans']['npmi']:.3f}")
+  print(f"    • English:  UMass={results['evaluation_metrics']['bertopic']['english']['umass']:.3f}, NPMI={results['evaluation_metrics']['bertopic']['english']['npmi']:.3f}")
 
   print("\n🎉 Pipeline execution completed successfully!")
 
