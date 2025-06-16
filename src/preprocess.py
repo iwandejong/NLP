@@ -5,19 +5,14 @@ from tqdm import tqdm
 
 class Preprocess:
   def __init__(self):
-    self.afrikaans_stopwords = set([
-        'die', 'van', 'en', 'in', 'is', 'het', 'dat', 'met', 'op', 
-        'vir', 'te', 'by', 'as', 'aan', 'was', 'sy', 'nie', 'hy',
-        'dit', 'haar', 'wat', 'word', 'sal', 'kan', 'ook', 'maar',
-        'so', 'nog', 'tot', 'na', 'om', 'oor', 'uit', 'al', 'daar'
-    ])
+    pass
 
-  def preprocess_text(self, texts: List[str], language: str = "af") -> List[str]:
+  def preprocess_text(self, texts: List[str], language: str = "af", min_doc_length: int = 10) -> List[str]:
     processed_texts = []
     
-    # Select stopwords based on language
+    # Select stopwords and stemmer based on language
     if language == "af":
-      stop_words = self.afrikaans_stopwords
+      stop_words = set(stopwords.words('afrikaans'))
     else:
       try:
         stop_words = set(stopwords.words('english'))
@@ -44,8 +39,8 @@ class Preprocess:
       tokens = text.split()
       tokens = [token for token in tokens if token not in stop_words and len(token) > 1]
       
-      # Only add if we have tokens after preprocessing
-      if tokens:
+      # Only add if we have enough tokens after preprocessing
+      if len(tokens) >= min_doc_length:
         processed_texts.append(' '.join(tokens))
 
     print(f"Number of valid documents after preprocessing: {len(processed_texts)}")

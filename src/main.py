@@ -109,8 +109,8 @@ def main():
     'nllb': translations,
   }
 
-  processed_af = preprocess.preprocess_text(transcripts, language="af")
-  processed_en = preprocess.preprocess_text(translations, language="en")
+  processed_af = preprocess.preprocess_text(transcripts, language="af", min_doc_length=15)
+  processed_en = preprocess.preprocess_text(translations, language="en", min_doc_length=15)
 
   if len(processed_af) == 0 or len(processed_en) == 0:
     print("No valid documents after preprocessing. Exiting pipeline.")
@@ -122,11 +122,11 @@ def main():
   print(f"Afrikaans: Average words per doc: {avg_len_af:.2f}")
   print(f"English: Average words per doc: {avg_len_en:.2f}")
 
-  # Train LDA models
-  lda_af, vectorizer_af = topic.train_lda(processed_af, n_topics=5)
-  lda_en, vectorizer_en = topic.train_lda(processed_en, n_topics=5)
+  # Train LDA models with automatic topic number selection
+  lda_af, vectorizer_af = topic.train_lda(processed_af)
+  lda_en, vectorizer_en = topic.train_lda(processed_en)
 
-  # Train BERTopic models
+  # Train BERTopic models with improved configuration
   bertopic_af = topic.train_bertopic(processed_af)
   bertopic_en = topic.train_bertopic(processed_en)
 
