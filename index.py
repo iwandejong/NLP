@@ -60,7 +60,7 @@ HOURS = 60 * 60
 @app.function(
     gpu=gpu,
     image=image,
-    timeout=int(1 * HOURS),
+    timeout=int(3 * HOURS),
     volumes={VOL_MOUNT_PATH: volume}, 
 )
 def main():
