@@ -92,7 +92,7 @@ class Topic:
       # Get top words for each topic with increased number
       topics = []
       for topic_idx, topic in enumerate(lda_model.components_):
-        top_words_idx = topic.argsort()[:-15-1:-1]  # Increased from 10 to 15
+        top_words_idx = topic.argsort()[:-15-1:-1]
         top_words = [feature_names[i] for i in top_words_idx]
         topics.append(top_words)
       
