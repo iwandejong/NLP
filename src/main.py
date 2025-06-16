@@ -123,17 +123,17 @@ def main():
   print(f"English: Average words per doc: {avg_len_en:.2f}")
 
   # Train LDA models with automatic topic number selection
-  lda_af, vectorizer_af = topic.train_lda(processed_af)
-  lda_en, vectorizer_en = topic.train_lda(processed_en)
+  lda_af, vectorizer_af = topic.train_lda(processed_af, n_topics=5)
+  lda_en, vectorizer_en = topic.train_lda(processed_en, n_topics=5)
 
   # Train BERTopic models with improved configuration
   bertopic_af = topic.train_bertopic(processed_af)
   bertopic_en = topic.train_bertopic(processed_en)
 
   # Print the topics for LDA models
+  lda_af_topics = []
   if lda_af:
     print("\nLDA Topics for Afrikaans:")
-    lda_af_topics = []
     for idx, topics in enumerate(lda_af.components_):
       terms = [vectorizer_af.get_feature_names_out()[i] for i in topics.argsort()[-10:]]
       print(f"Topic {idx}: {', '.join(terms)}")
@@ -142,9 +142,9 @@ def main():
         'terms': terms
       })
 
+  lda_en_topics = []
   if lda_en:
     print("\nLDA Topics for English:")
-    lda_en_topics = []
     for idx, topics in enumerate(lda_en.components_):
       terms = [vectorizer_en.get_feature_names_out()[i] for i in topics.argsort()[-10:]]
       print(f"Topic {idx}: {', '.join(terms)}")

@@ -5,14 +5,26 @@ from tqdm import tqdm
 
 class Preprocess:
   def __init__(self):
-    pass
+    self.AFRIKAANS_STOPWORDS = set([
+      'aangaande', 'aangesien', 'al', 'alhoewel', 'as', 'baie', 
+      'behalwe', 'belangrikste', 'beperkte', 'by', 'daar', 
+      'daardie', 'daarin', 'dan', 'dat', 'die', 'dit', 
+      'dus', 'een', 'en', 'ens', 'geen', 'gewees', 'haar', 
+      'het', 'hom', 'hulle', 'hy', 'in', 'is', 'jou', 
+      'kan', 'kon', 'maw', 'met', 'moet', 'my', 'na', 
+      'nie', 'om', 'ons', 'onses', 'op', 'saam', 'sal', 
+      'se', 'self', 'sien', 'so', 'sonder', 'sou', 'sy', 
+      'synde', 'teen', 'terwyl', 'toe', 'tussen', 'uit', 
+      'van', 'vir', 'was', 'wat', 'wees', 'waar', 'wanneer', 
+      'wat', 'wie', 'wil', 'word', 'worden'
+    ])
 
   def preprocess_text(self, texts: List[str], language: str = "af", min_doc_length: int = 10) -> List[str]:
     processed_texts = []
     
     # Select stopwords and stemmer based on language
     if language == "af":
-      stop_words = set(stopwords.words('afrikaans'))
+      stop_words = set(self.AFRIKAANS_STOPWORDS)
     else:
       try:
         stop_words = set(stopwords.words('english'))

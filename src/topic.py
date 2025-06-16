@@ -12,52 +12,6 @@ class Topic:
   def __init__(self):
     pass
 
-  def find_optimal_topics(self, texts: List[str], vectorizer: CountVectorizer, min_topics: int = 2, max_topics: int = 10) -> int:
-    """Find optimal number of topics using coherence scores"""
-    print("Finding optimal number of topics...")
-    coherence_scores = []
-    
-    for n_topics in range(min_topics, max_topics + 1):
-      lda = LatentDirichletAllocation(
-        n_components=n_topics,
-        random_state=42,
-        max_iter=200,
-        learning_method='batch',
-        learning_offset=10.0,
-        batch_size=4,
-        n_jobs=-1
-      )
-      
-      doc_term_matrix = vectorizer.fit_transform(texts)
-      lda.fit(doc_term_matrix)
-      
-      # Get topics
-      topics = []
-      feature_names = vectorizer.get_feature_names_out()
-      for topic_idx, topic in enumerate(lda.components_):
-        top_words_idx = topic.argsort()[:-15-1:-1]
-        top_words = [feature_names[i] for i in top_words_idx]
-        topics.append(top_words)
-      
-      # Calculate coherence
-      tokenized_texts = [text.split() for text in texts]
-      dictionary = Dictionary(tokenized_texts)
-      corpus = [dictionary.doc2bow(text) for text in tokenized_texts]
-      
-      cm = CoherenceModel(
-        topics=topics,
-        corpus=corpus,
-        dictionary=dictionary,
-        coherence='c_npmi',
-        processes=-1
-      )
-      coherence_scores.append(cm.get_coherence())
-    
-    # Return number of topics with highest coherence
-    optimal_topics = min_topics + np.argmax(coherence_scores)
-    print(f"Optimal number of topics: {optimal_topics}")
-    return optimal_topics
-
   def train_lda(self, texts: List[str], n_topics: int = None) -> Tuple[Optional[LatentDirichletAllocation], Optional[CountVectorizer]]:
     """Train LDA topic model with improved parameters"""
     print("Training LDA...")
@@ -73,16 +27,12 @@ class Topic:
     vectorizer = CountVectorizer(
       min_df=2,
       max_df=0.7,
-      ngram_range=(1, 2),  # Include bigrams
+      ngram_range=(1, 1),
       max_features=10000
     )
     
     try:
       doc_term_matrix = vectorizer.fit_transform(texts)
-      
-      # Find optimal number of topics if not specified
-      if n_topics is None:
-        n_topics = self.find_optimal_topics(texts, vectorizer)
       
       # Train LDA with improved parameters
       lda = LatentDirichletAllocation(
@@ -93,8 +43,8 @@ class Topic:
         learning_offset=10.0,
         batch_size=4,
         n_jobs=-1,
-        doc_topic_prior=0.1,  # Alpha parameter
-        topic_word_prior=0.01  # Beta parameter
+        doc_topic_prior=0.1,
+        topic_word_prior=0.01
       )
       lda.fit(doc_term_matrix)
       
@@ -117,12 +67,12 @@ class Topic:
     
     # Initialize BERTopic with improved configuration
     topic_model = BERTopic(
-      embedding_model="all-mpnet-base-v2",  # More powerful embedding model
-      min_topic_size=5,  # Increased minimum topic size
-      n_gram_range=(1, 2),  # Include bigrams
+      embedding_model="all-mpnet-base-v2",
+      min_topic_size=5,
+      n_gram_range=(1, 1),
       verbose=True,
       calculate_probabilities=True,
-      nr_topics="auto"  # Automatically determine number of topics
+      nr_topics="auto"
     )
     
     try:
