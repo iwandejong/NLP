@@ -19,13 +19,38 @@ os.environ["TOKENIZERS_PARALLELISM"] = "false"
 import modal
 import pathlib
 app = modal.App("nlp-project")
-gpu = "T4"
+gpu = "A100"
 
 image = (
     modal.Image.debian_slim()
-    .pip_install("transformers", "torch", "torchaudio", "datasets", "librosa", "jiwer", "scikit-learn", "gensim", "bertopic", "nltk", "matplotlib", "seaborn", "plotly", "sentence-transformers", "umap-learn", "hdbscan", "sentencepiece")
-    .add_local_dir("cv-corpus-21.0-2025-03-14", remote_path="/root/cv-corpus-21.0-2025-03-14")
+    .pip_install(
+    "transformers",
+    "torch",
+    "torchaudio",
+    "datasets",
+    "librosa",
+    "jiwer",
+    "scikit-learn",
+    "gensim",
+    "bertopic",
+    "nltk",
+    "matplotlib",
+    "seaborn",
+    "plotly",
+    "sentence-transformers",
+    "umap-learn",
+    "hdbscan",
+    "sentencepiece"
 )
+    .run_commands(
+        "python -c \"from transformers import M2M100Tokenizer, M2M100ForConditionalGeneration; "
+        "M2M100Tokenizer.from_pretrained('facebook/m2m100_418M'); "
+        "M2M100ForConditionalGeneration.from_pretrained('facebook/m2m100_418M')\""
+    )
+    .add_local_dir("cv-corpus-21.0-2025-03-14", remote_path="/root/cv-corpus-21.0-2025-03-14")
+    .add_local_dir("podcast_chunks", remote_path="/root/podcast_chunks")
+)
+
 
 volume = modal.Volume.from_name("storage", create_if_missing=True)
 VOL_MOUNT_PATH = pathlib.Path("/vol")
@@ -35,7 +60,7 @@ HOURS = 60 * 60
 @app.function(
     gpu=gpu,
     image=image,
-    timeout=int(0.5 * HOURS),
+    timeout=int(1 * HOURS),
     volumes={VOL_MOUNT_PATH: volume}, 
 )
 def main():
@@ -208,7 +233,18 @@ def main():
             except Exception as e:
                 print(f"Error loading dataset: {e}")
                 return []
-        
+        def load_podcast_chunks(self, chunk_dir="podcast_chunks"):
+            """Load audio chunks from a directory, no reference transcript."""
+            import librosa, os
+            audio_data = []
+            for fname in os.listdir(chunk_dir):
+                if fname.endswith(".mp3"):
+                    path = os.path.join(chunk_dir, fname)
+                    audio, sr = librosa.load(path, sr=16000)
+                    audio_data.append({'audio': audio, 'sampling_rate': 16000, 'text': ""})
+            print(f"Loaded {len(audio_data)} podcast chunks from {chunk_dir}")
+            return audio_data
+
         def transcribe_whisper(self, audio_data: List[Dict]) -> List[str]:
             """Transcribe audio using Whisper"""
             if self.whisper_model is None:
@@ -355,12 +391,12 @@ def main():
                 
                 # Simple tokenization and remove stopwords
                 tokens = text.split()
-                tokens = [token for token in tokens if token not in stop_words and len(token) > 2]
+                tokens = [token for token in tokens if token not in stop_words and len(token) > 1]
                 
                 # Only add if we have tokens after preprocessing
                 if tokens:
                     processed_texts.append(' '.join(tokens))
-            
+            print(f"Number of valid documents after preprocessing: {len(processed_texts)}")
             return processed_texts
         
         def train_lda(self, texts: List[str], n_topics: int = 5) -> Tuple[Optional[LatentDirichletAllocation], Optional[CountVectorizer]]:
@@ -376,10 +412,9 @@ def main():
             
             # Vectorize texts with improved parameters
             vectorizer = CountVectorizer(
-                max_features=200,  # Increased from 100
-                min_df=2,          # Increased from 1
-                max_df=0.7,        # Decreased from 0.8
-                ngram_range=(1, 3) # Increased from (1, 2)
+                min_df=1,          # Increased from 1
+                max_df=0.9,        # Decreased from 0.8
+                ngram_range=(1, 2) # Increased from (1, 2)
             )
             
             try:
@@ -394,10 +429,10 @@ def main():
                 lda = LatentDirichletAllocation(
                     n_components=n_topics,
                     random_state=42,
-                    max_iter=20,
+                    max_iter=100,
                     learning_method='online',
                     learning_offset=50.0,
-                    batch_size=128,
+                    batch_size=32,
                     n_jobs=-1
                 )
                 lda.fit(doc_term_matrix)
@@ -413,7 +448,8 @@ def main():
             
             # Remove empty texts
             texts = [text for text in texts if text.strip()]
-            
+            print(f"BERTopic: {len(texts)} valid documents to train on")
+
             if len(texts) == 0:
                 print("No valid texts for BERTopic training")
                 return None
@@ -501,9 +537,15 @@ def main():
             print("AFRIKAANS ASR AND TOPIC MODELING PIPELINE")
             print("=" * 60)
             
-            # 1. Load data
-            audio_data = self.load_data()
-            reference_texts = [sample['text'] for sample in audio_data]
+            # Uncomment the one you want to use:
+
+            # For Common Voice:
+            # audio_data = self.load_data()
+            # reference_texts = [sample['text'] for sample in audio_data]
+
+            # For Podcast Chunks:
+            audio_data = self.load_podcast_chunks(chunk_dir="/root/podcast_chunks")
+            reference_texts = [""] * len(audio_data)  # No reference transcripts, so WER will be skipped/meaningless
             
             # 2. ASR Transcription
             print("\n" + "=" * 40)
@@ -546,10 +588,15 @@ def main():
             # Preprocess texts
             processed_af = self.preprocess_text(whisper_transcripts, language="af")
             processed_en = self.preprocess_text(nllb_translations, language="en")
-            
+            # Diagnostics: Check average document length
+            avg_len_af = sum(len(doc.split()) for doc in processed_af) / len(processed_af)
+            avg_len_en = sum(len(doc.split()) for doc in processed_en) / len(processed_en)
+            print(f"Afrikaans: Average words per doc: {avg_len_af:.2f}")
+            print(f"English: Average words per doc: {avg_len_en:.2f}")
+
             # Train models
-            lda_af, vectorizer_af = self.train_lda(processed_af, n_topics=3)
-            lda_en, vectorizer_en = self.train_lda(processed_en, n_topics=3)
+            lda_af, vectorizer_af = self.train_lda(processed_af, n_topics=2)
+            lda_en, vectorizer_en = self.train_lda(processed_en, n_topics=2)
             
             # Calculate coherence scores
             coherence_af = self.calculate_topic_coherence(processed_af, lda_af, vectorizer_af)
