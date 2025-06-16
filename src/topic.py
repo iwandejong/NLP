@@ -1,0 +1,170 @@
+from sklearn.feature_extraction.text import CountVectorizer
+from sklearn.decomposition import LatentDirichletAllocation
+from gensim.models.coherencemodel import CoherenceModel
+from gensim.corpora import Dictionary
+from bertopic import BERTopic
+from tqdm import tqdm
+from typing import List, Tuple, Optional, Dict
+
+class Topic:
+  def __init__(self):
+    pass
+
+  def train_lda(self, texts: List[str], n_topics: int = 5) -> Tuple[Optional[LatentDirichletAllocation], Optional[CountVectorizer]]:
+    """Train LDA topic model with improved parameters"""
+    print(f"Training LDA with {n_topics} topics...")
+    
+    # Remove empty texts and ensure we have valid strings
+    texts = [text for text in texts if text and isinstance(text, str) and text.strip()]
+    
+    if len(texts) < n_topics:
+      print(f"Not enough valid texts for {n_topics} topics. Need at least {n_topics} texts.")
+      return None, None
+    
+    # Vectorize texts with improved parameters
+    vectorizer = CountVectorizer(
+      min_df=1,
+      max_df=0.9,
+      ngram_range=(1, 2)
+    )
+    
+    try:
+      doc_term_matrix = vectorizer.fit_transform(texts)
+      
+      # Check if we have enough features
+      if doc_term_matrix.shape[1] < n_topics:
+        print(f"Not enough features for {n_topics} topics. Need at least {n_topics} features.")
+        return None, None
+      
+      # Train LDA with improved parameters
+      lda = LatentDirichletAllocation(
+        n_components=n_topics,
+        random_state=42,
+        max_iter=100,
+        learning_method='online',
+        learning_offset=50.0,
+        batch_size=32,
+        n_jobs=-1
+      )
+      lda.fit(doc_term_matrix)
+      
+      return lda, vectorizer
+    except Exception as e:
+      print(f"Error training LDA: {e}")
+      return None, None
+        
+  def train_bertopic(self, texts: List[str]) -> Optional[BERTopic]:
+    """Train BERTopic model"""
+    print("Training BERTopic...")
+    
+    # Remove empty texts
+    texts = [text for text in texts if text.strip()]
+    print(f"BERTopic: {len(texts)} valid documents to train on")
+
+    if len(texts) == 0:
+      print("No valid texts for BERTopic training")
+      return None
+    
+    # Initialize BERTopic with smaller embedding model for efficiency
+    topic_model = BERTopic(
+      embedding_model="all-MiniLM-L6-v2",
+      min_topic_size=2,
+      verbose=True
+    )
+    
+    try:
+      topics, probs = topic_model.fit_transform(texts)
+      return topic_model
+    except Exception as e:
+      print(f"Error training BERTopic: {e}")
+      return None
+
+  def calculate_lda_topic_coherence(self, texts: List[str], lda_model, vectorizer):
+    if not texts or lda_model is None or vectorizer is None:
+      return {'umass': 0, 'npmi': 0}
+    try:
+      # Tokenize texts with improved preprocessing
+      tokenized_texts = [text.split() for text in texts if text.strip()]
+      
+      # Get feature names from vectorizer
+      feature_names = vectorizer.get_feature_names_out()
+      
+      # Get top words for each topic with increased number
+      topics = []
+      for topic_idx, topic in enumerate(lda_model.components_):
+        top_words_idx = topic.argsort()[:-15-1:-1]  # Increased from 10 to 15
+        top_words = [feature_names[i] for i in top_words_idx]
+        topics.append(top_words)
+      
+      # Create dictionary and corpus for coherence calculation
+      dictionary = Dictionary(tokenized_texts)
+      corpus = [dictionary.doc2bow(text) for text in tokenized_texts]
+      
+      # Calculate UMass coherence with improved parameters
+      cm_umass = CoherenceModel(
+        topics=topics,
+        corpus=corpus,
+        dictionary=dictionary,
+        coherence='u_mass',
+        processes=-1  # Use all available cores
+      )
+      umass_score = cm_umass.get_coherence()
+      
+      # Calculate NPMI coherence with improved parameters
+      cm_npmi = CoherenceModel(
+        topics=topics,
+        texts=tokenized_texts,
+        dictionary=dictionary,
+        coherence='c_npmi',
+        processes=-1  # Use all available cores
+      )
+      npmi_score = cm_npmi.get_coherence()
+      
+      return {'umass': umass_score, 'npmi': npmi_score}
+    except Exception as e:
+      print(f"Error calculating coherence: {e}")
+
+  def calculate_bertopic_topic_coherence(self, texts: List[str], bertopic_model, top_n: int = 15) -> Dict[str, float]:
+    if not texts or bertopic_model is None:
+      return {'umass': 0, 'npmi': 0}
+
+    try:
+      # Tokenize texts
+      tokenized_texts = [text.split() for text in texts if text.strip()]
+
+      # Extract topics directly from BERTopic
+      topics = []
+      for topic_id in bertopic_model.get_topics():
+        words_scores = bertopic_model.get_topics()[topic_id][:top_n]
+        topic_words = [word for word, _ in words_scores]
+        topics.append(topic_words)
+
+      # Prepare corpus for coherence model
+      dictionary = Dictionary(tokenized_texts)
+      corpus = [dictionary.doc2bow(text) for text in tokenized_texts]
+
+      # UMass coherence
+      cm_umass = CoherenceModel(
+        topics=topics,
+        corpus=corpus,
+        dictionary=dictionary,
+        coherence='u_mass',
+        processes=-1
+      )
+      umass_score = cm_umass.get_coherence()
+
+      # NPMI coherence
+      cm_npmi = CoherenceModel(
+        topics=topics,
+        texts=tokenized_texts,
+        dictionary=dictionary,
+        coherence='c_npmi',
+        processes=-1
+      )
+      npmi_score = cm_npmi.get_coherence()
+
+      return {'umass': umass_score, 'npmi': npmi_score}
+
+    except Exception as e:
+      print(f"Error calculating coherence: {e}")
+      return {'umass': 0, 'npmi': 0}
