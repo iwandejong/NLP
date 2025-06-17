@@ -1,22 +1,59 @@
-from transformers import WhisperProcessor, WhisperForConditionalGeneration, AutoProcessor, SeamlessM4Tv2ForSpeechToText
+from transformers import WhisperProcessor, WhisperForConditionalGeneration, AutoProcessor, SeamlessM4Tv2ForSpeechToText, AutoModelForSpeechSeq2Seq, pipeline
 import torch
-from jiwer import wer
+import evaluate
 from typing import List, Dict
 from tqdm import tqdm
 from datasets import Audio
 
 class ASR:
-  def __init__(self, model_name):
-    self.whisper_processor = WhisperProcessor.from_pretrained(model_name)
-    self.whisper_model = WhisperForConditionalGeneration.from_pretrained(model_name)
-    self.whisper_model.to("cuda" if torch.cuda.is_available() else "cpu")
+  def __init__(self, model_name=None):
+    self.model_name = model_name
+    self.whisper_processor = None
+    self.whisper_model = None
+    self.m4tv2_processor = None
+    self.m4tv2_model = None
+    self.whisper_small_processor = None
+    self.whisper_small_model = None
+    self.whisper_small_pipe = None
 
-    self.m4tv2_model_id = "facebook/seamless-m4t-v2-large"
-    self.m4tv2_processor = AutoProcessor.from_pretrained(self.m4tv2_model_id)
-    self.m4tv2_model = SeamlessM4Tv2ForSpeechToText.from_pretrained(self.m4tv2_model_id)
-    self.m4tv2_model.to("cuda" if torch.cuda.is_available() else "cpu")
+  def _load_whisper(self):
+    if self.whisper_processor is None or self.whisper_model is None:
+      self.whisper_processor = WhisperProcessor.from_pretrained(self.model_name)
+      self.whisper_model = WhisperForConditionalGeneration.from_pretrained(self.model_name)
+      self.whisper_model.to("cuda" if torch.cuda.is_available() else "cpu")
+
+  def _load_m4tv2(self):
+    if self.m4tv2_processor is None or self.m4tv2_model is None:
+      self.m4tv2_model_id = "facebook/seamless-m4t-v2-large"
+      self.m4tv2_processor = AutoProcessor.from_pretrained(self.m4tv2_model_id)
+      self.m4tv2_model = SeamlessM4Tv2ForSpeechToText.from_pretrained(self.m4tv2_model_id)
+      self.m4tv2_model.to("cuda" if torch.cuda.is_available() else "cpu")
+
+  def _load_whisper_small(self):
+    if self.whisper_small_pipe is None:
+      device = "cuda:0" if torch.cuda.is_available() else "cpu"
+      torch_dtype = torch.float16 if torch.cuda.is_available() else torch.float32
+      model_id = "openai/whisper-small"
+
+      model = AutoModelForSpeechSeq2Seq.from_pretrained(
+          model_id, torch_dtype=torch_dtype, low_cpu_mem_usage=True, use_safetensors=True
+      )
+      model.to(device)
+
+      processor = AutoProcessor.from_pretrained(model_id)
+
+      self.whisper_small_pipe = pipeline(
+          "automatic-speech-recognition",
+          model=model,
+          tokenizer=processor.tokenizer,
+          feature_extractor=processor.feature_extractor,
+          torch_dtype=torch_dtype,
+          device=device,
+          generate_kwargs={"language": "af"}
+      )
 
   def transcribe_whisper(self, audio_data: List[Dict]) -> List[str]:
+    self._load_whisper()
     transcriptions = []
     print("Transcribing with Whisper...")
     
@@ -58,6 +95,7 @@ class ASR:
     return transcriptions
   
   def transcribe_m4tv2(self, audio_data: List[Dict]) -> List[str]:
+    self._load_m4tv2()
     transcriptions = []
 
     for x in tqdm(audio_data, desc="Transcribing with M4T-V2", total=len(audio_data)):
@@ -73,18 +111,21 @@ class ASR:
 
       transcriptions.append(transcription)
     return transcriptions
+
+  def transcribe_whisper_small(self, audio_data: List[Dict]) -> List[str]:
+    self._load_whisper_small()
+    transcriptions = []
+    
+    for x in tqdm(audio_data, desc="Transcribing with Whisper Small", total=len(audio_data)):
+      try:
+        result = self.whisper_small_pipe(x["audio"])
+        transcriptions.append(result["text"])
+      except Exception as e:
+        print(f"Error transcribing with Whisper Small: {e}")
+        transcriptions.append("")
+    
+    return transcriptions
   
   def calculate_wer(self, reference_texts: List[str], hypothesis_texts: List[str]) -> float:
-    total_wer = 0
-    valid_pairs = 0
-    
-    for ref, hyp in zip(reference_texts, hypothesis_texts):
-      if ref.strip() and hyp.strip():
-        try:
-          total_wer += wer(ref, hyp)
-          valid_pairs += 1
-        except Exception as e:
-          print(f"Error calculating WER: {e}")
-          continue
-    
-    return total_wer / valid_pairs if valid_pairs > 0 else 1.0
+    wer_metric = evaluate.load("wer")
+    return wer_metric.compute(predictions=hypothesis_texts, references=reference_texts)

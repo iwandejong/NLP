@@ -1,50 +1,42 @@
 import os
 import librosa
 from tqdm import tqdm
+from datasets import load_dataset
+from huggingface_hub import login
 
 class Loader:
   def __init__(self):
     pass
 
   def load_data(self, min_duration: float = 3.0):
-    """Load Afrikaans data from Common Voice dataset"""
-    print("Loading Common Voice Afrikaans dataset...")
+    """Load Afrikaans data from Common Voice dataset version 17.0"""
+    print("Loading Common Voice Afrikaans dataset from Hugging Face...")
     
     try:
-      clips_dir = '/root/cv-corpus-21.0-2025-03-14/af/clips'
-      tsv_files = [
-        '/root/cv-corpus-21.0-2025-03-14/af/test.tsv',
-        '/root/cv-corpus-21.0-2025-03-14/af/train.tsv',
-        '/root/cv-corpus-21.0-2025-03-14/af/validated.tsv'
-      ]
+      # Log in to Hugging Face
+      login(token="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")
       
-      # Load transcriptions from all TSV files
-      transcriptions = {}
-      for tsv_path in tsv_files:
-        with open(tsv_path, 'r', encoding='utf-8') as f:
-          next(f)  # Skip header
-          for line in f:
-            parts = line.strip().split('\t')
-            if len(parts) >= 2:
-              filename = parts[1]
-              text = parts[2]
-              transcriptions[filename] = text
+      # Load dataset from Hugging Face
+      dataset = load_dataset("mozilla-foundation/common_voice_17_0", "af", split="validated", trust_remote_code=True)
       
-      # Load audio files
+      # Convert to our format
       audio_data = []
-      for filename in os.listdir(clips_dir):
-        if filename.endswith('.mp3'):
-          if filename in transcriptions:
-            audio_path = os.path.join(clips_dir, filename)
-            # Load audio file and resample to 16000 Hz
-            audio, sr = librosa.load(audio_path, sr=16000)  # Force 16000 Hz sampling rate
-            audio_data.append({
-              'audio': audio,
-              'sampling_rate': 16000,  # Set sampling rate to 16000
-              'text': transcriptions[filename]
-            })
+      for item in tqdm(dataset, desc="Processing audio files"):
+        audio = item["audio"]["array"]
+        sr = item["audio"]["sampling_rate"]
+        
+        # Resample to 16000 Hz if needed
+        if sr != 16000:
+          audio = librosa.resample(audio, orig_sr=sr, target_sr=16000)
+          sr = 16000
+          
+        audio_data.append({
+          'audio': audio,
+          'sampling_rate': sr,
+          'text': item["sentence"]
+        })
       
-      print(f"Loaded {len(audio_data)} audio samples from all splits")
+      print(f"Loaded {len(audio_data)} audio samples")
       return audio_data
     except Exception as e:
         print(f"Error loading dataset: {e}")

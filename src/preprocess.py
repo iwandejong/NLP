@@ -19,7 +19,7 @@ class Preprocess:
       'wat', 'wie', 'wil', 'word', 'worden'
     ])
 
-  def preprocess_text(self, texts: List[str], language: str = "af", min_doc_length: int = 10) -> List[str]:
+  def preprocess_text(self, texts: List[str], language: str = "af", min_doc_length: int = 0) -> List[str]:
     processed_texts = []
     
     # Select stopwords and stemmer based on language
