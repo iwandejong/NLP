@@ -19,7 +19,7 @@ class Preprocess:
       'wat', 'wie', 'wil', 'word', 'worden'
     ])
 
-  def preprocess_text(self, texts: List[str], language: str = "af", min_doc_length: int = 0) -> List[str]:
+  def preprocess_sentence(self, texts: List[str], language: str = "af", min_doc_length: int = 0) -> List[str]:
     processed_texts = []
     
     # Select stopwords and stemmer based on language
@@ -57,3 +57,19 @@ class Preprocess:
 
     print(f"Number of valid documents after preprocessing: {len(processed_texts)}")
     return processed_texts
+  
+  def chunk_sentences(self, sentences, chunk_size=5):
+    return [
+      ". ".join(sentences[i:i + chunk_size])
+      for i in range(0, len(sentences), chunk_size)
+    ]
+  
+  def preprocess_text(self, texts: List[str], language: str = "af", min_doc_length: int = 0) -> List[str]:
+    result = self.preprocess_sentence(texts, language, min_doc_length)
+    if len(result) == 0:
+      print("No valid documents after preprocessing.")
+      return []
+    
+    result = self.chunk_sentences(result)
+
+    return result

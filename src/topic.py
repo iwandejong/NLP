@@ -7,6 +7,11 @@ from tqdm import tqdm
 from typing import List, Tuple, Optional, Dict
 import numpy as np
 from sentence_transformers import SentenceTransformer
+from sklearn.cluster import KMeans
+from transformers import pipeline
+import numpy as np
+import random
+from typing import List, Dict
 
 class Topic:
   def __init__(self):
@@ -67,12 +72,13 @@ class Topic:
     
     # Initialize BERTopic with improved configuration
     topic_model = BERTopic(
-      embedding_model="all-mpnet-base-v2",
+      embedding_model="paraphrase-multilingual-MiniLM-L12-v2",
       min_topic_size=5,
       n_gram_range=(1, 1),
       verbose=True,
       calculate_probabilities=True,
-      nr_topics="auto"
+      nr_topics="auto",
+      language="multilingual"
     )
     
     try:
@@ -172,4 +178,3 @@ class Topic:
 
     except Exception as e:
       print(f"Error calculating coherence: {e}")
-      return {'umass': 0, 'npmi': 0}

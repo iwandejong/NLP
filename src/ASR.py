@@ -6,8 +6,7 @@ from tqdm import tqdm
 from datasets import Audio
 
 class ASR:
-  def __init__(self, model_name=None):
-    self.model_name = model_name
+  def __init__(self):
     self.whisper_processor = None
     self.whisper_model = None
     self.m4tv2_processor = None
@@ -18,6 +17,7 @@ class ASR:
 
   def _load_whisper(self):
     if self.whisper_processor is None or self.whisper_model is None:
+      self.model_name = "openai/whisper-large-v3"
       self.whisper_processor = WhisperProcessor.from_pretrained(self.model_name)
       self.whisper_model = WhisperForConditionalGeneration.from_pretrained(self.model_name)
       self.whisper_model.to("cuda" if torch.cuda.is_available() else "cpu")
@@ -31,14 +31,13 @@ class ASR:
 
   def _load_whisper_small(self):
     if self.whisper_small_pipe is None:
-      device = "cuda:0" if torch.cuda.is_available() else "cpu"
       torch_dtype = torch.float16 if torch.cuda.is_available() else torch.float32
       model_id = "openai/whisper-small"
 
       model = AutoModelForSpeechSeq2Seq.from_pretrained(
           model_id, torch_dtype=torch_dtype, low_cpu_mem_usage=True, use_safetensors=True
       )
-      model.to(device)
+      model.to("cuda" if torch.cuda.is_available() else "cpu")
 
       processor = AutoProcessor.from_pretrained(model_id)
 
@@ -48,7 +47,7 @@ class ASR:
           tokenizer=processor.tokenizer,
           feature_extractor=processor.feature_extractor,
           torch_dtype=torch_dtype,
-          device=device,
+          device="cuda" if torch.cuda.is_available() else "cpu",
           generate_kwargs={"language": "af"}
       )
 

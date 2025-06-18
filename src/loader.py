@@ -8,12 +8,13 @@ class Loader:
   def __init__(self):
     pass
 
-  def load_data(self, min_duration: float = 3.0):
+  def load_data(self):
     """Load Afrikaans data from Common Voice dataset version 17.0"""
     print("Loading Common Voice Afrikaans dataset from Hugging Face...")
     
     try:
       # Log in to Hugging Face
+      # login(token=os.getenv("HF_TOKEN"))
       login(token="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")
       
       # Load dataset from Hugging Face

@@ -35,7 +35,8 @@ image = (
   "hdbscan",
   "sentencepiece",
   "tqdm",
-  "evaluate"
+  "evaluate",
+  "hbdscan",
 )
   .run_commands(
     "python -c \"from transformers import M2M100Tokenizer, M2M100ForConditionalGeneration; "
@@ -141,6 +142,7 @@ def main():
   import warnings
   import torch
   import nltk
+  import json
 
   from src.loader import Loader
   from src.preprocess import Preprocess
@@ -163,7 +165,7 @@ def main():
   print("Loading Preprocess")
   preprocess = Preprocess()
   print("Loading ASR")
-  asr = ASR(model_name="openai/whisper-large-v3")
+  asr = ASR()
   print("Loading Translate")
   translate = Translate()
   print("Loading Topic")
@@ -187,30 +189,30 @@ def main():
   reference_texts = [sample['text'] for sample in audio_data]
   
   # Transcribe with different models
-  whisper_transcripts = asr.transcribe_whisper(audio_data)
-  m4tv2_transcripts = asr.transcribe_m4tv2(audio_data)
+  # whisper_transcripts = asr.transcribe_whisper(audio_data)
+  # m4tv2_transcripts = asr.transcribe_m4tv2(audio_data)
   whisper_small_transcripts = asr.transcribe_whisper_small(audio_data)
 
   # Calculate WER for each model
-  whisper_wer = asr.calculate_wer(reference_texts, whisper_transcripts)
-  m4tv2_wer = asr.calculate_wer(reference_texts, m4tv2_transcripts)
+  # whisper_wer = asr.calculate_wer(reference_texts, whisper_transcripts)
+  # m4tv2_wer = asr.calculate_wer(reference_texts, m4tv2_transcripts)
   whisper_small_wer = asr.calculate_wer(reference_texts, whisper_small_transcripts)
 
   print("\nWord Error Rate (WER) Results:")
-  print(f"Whisper Large v3: {whisper_wer:.4f}")
-  print(f"Seamless M4T v2: {m4tv2_wer:.4f}")
+  # print(f"Whisper Large v3: {whisper_wer:.4f}")
+  # print(f"Seamless M4T v2: {m4tv2_wer:.4f}")
   print(f"Whisper Small: {whisper_small_wer:.4f}")
 
   # Store results for each model
   model_results = {
-    'whisper_large': {
-      'transcripts': whisper_transcripts,
-      'wer': whisper_wer
-    },
-    'm4tv2': {
-      'transcripts': m4tv2_transcripts,
-      'wer': m4tv2_wer
-    },
+    # 'whisper_large': {
+    #   'transcripts': whisper_transcripts,
+    #   'wer': whisper_wer
+    # },
+    # 'm4tv2': {
+    #   'transcripts': m4tv2_transcripts,
+    #   'wer': m4tv2_wer
+    # },
     'whisper_small': {
       'transcripts': whisper_small_transcripts,
       'wer': whisper_small_wer
@@ -226,47 +228,68 @@ def main():
     transcripts = model_data['transcripts']
     
     # Translate
-    translations = translate.translate_nllb(transcripts)
+    processed_translations = translate.translate_nllb(transcripts)
+    reference_translations = translate.translate_nllb(reference_texts)
     
     # Preprocess
     processed_af = preprocess.preprocess_text(transcripts, language="af")
-    processed_en = preprocess.preprocess_text(translations, language="en")
-    
-    print(f"Number of processed Afrikaans texts: {len(processed_af)}")
-    print(f"Number of processed English texts: {len(processed_en)}")
+    processed_en = preprocess.preprocess_text(processed_translations, language="en")
+
+    # Also preprocess the reference texts
+    reference_af = preprocess.preprocess_text(reference_texts, language="af")
+    reference_en = preprocess.preprocess_text(reference_translations, language="en")
+
+    print("PROCESSED:", len(processed_af), processed_af[:5])  # Print first 5 processed Afrikaans texts
+    print("PROCESSED:", len(processed_en), processed_en[:5])  # Print first 5 processed English texts
+    print("REF:", len(reference_af), reference_af[:5])  # Print first 5 reference Afrikaans texts
+    print("REF:", len(reference_en), reference_en[:5])  # Print first 5 reference English texts
     
     if len(processed_af) > 0 and len(processed_en) > 0:
       # Train topic models for Afrikaans
       lda_af, vectorizer_af = topic.train_lda(processed_af, n_topics=5)
       bertopic_af = topic.train_bertopic(processed_af)
+      # Reference
+      lda_af_reference, vectorizer_af_reference = topic.train_lda(reference_af, n_topics=5)
+      bertopic_af_reference = topic.train_bertopic(reference_af)
       
       # Train topic models for English
       lda_en, vectorizer_en = topic.train_lda(processed_en, n_topics=5)
       bertopic_en = topic.train_bertopic(processed_en)
+      # Reference
+      lda_en_reference, vectorizer_en_reference = topic.train_lda(reference_en, n_topics=5)
+      bertopic_en_reference = topic.train_bertopic(reference_en)
       
       # Calculate coherence scores for Afrikaans
       if lda_af is not None and vectorizer_af is not None:
         coherence_af_lda = topic.calculate_lda_topic_coherence(processed_af, lda_af, vectorizer_af)
+        coherence_af_lda_reference = topic.calculate_lda_topic_coherence(reference_af, lda_af_reference, vectorizer_af_reference)
         print(f"LDA Coherence scores for Afrikaans ({model_name}): {coherence_af_lda}")
+        print(f"LDA Coherence scores for Afrikaans (Reference): {coherence_af_lda_reference}")
       else:
         coherence_af_lda = {'umass': 0, 'npmi': 0}
         
       if bertopic_af is not None:
         coherence_af_bertopic = topic.calculate_bertopic_topic_coherence(processed_af, bertopic_af)
+        coherence_af_bertopic_reference = topic.calculate_bertopic_topic_coherence(reference_af, bertopic_af_reference)
         print(f"BERTopic Coherence scores for Afrikaans ({model_name}): {coherence_af_bertopic}")
+        print(f"BERTopic Coherence scores for Afrikaans (Reference): {coherence_af_bertopic_reference}")
       else:
         coherence_af_bertopic = {'umass': 0, 'npmi': 0}
       
       # Calculate coherence scores for English
       if lda_en is not None and vectorizer_en is not None:
         coherence_en_lda = topic.calculate_lda_topic_coherence(processed_en, lda_en, vectorizer_en)
+        coherence_en_lda_reference = topic.calculate_lda_topic_coherence(reference_en, lda_en_reference, vectorizer_en_reference)
         print(f"LDA Coherence scores for English ({model_name}): {coherence_en_lda}")
+        print(f"LDA Coherence scores for English (Reference): {coherence_en_lda_reference}")
       else:
         coherence_en_lda = {'umass': 0, 'npmi': 0}
         
       if bertopic_en is not None:
         coherence_en_bertopic = topic.calculate_bertopic_topic_coherence(processed_en, bertopic_en)
+        coherence_en_bertopic_reference = topic.calculate_bertopic_topic_coherence(reference_en, bertopic_en_reference)
         print(f"BERTopic Coherence scores for English ({model_name}): {coherence_en_bertopic}")
+        print(f"BERTopic Coherence scores for English (Reference): {coherence_en_bertopic_reference}")
       else:
         coherence_en_bertopic = {'umass': 0, 'npmi': 0}
       
@@ -277,7 +300,11 @@ def main():
         'npmi_af_lda': coherence_af_lda['npmi'],
         'npmi_en_lda': coherence_en_lda['npmi'],
         'npmi_af_bertopic': coherence_af_bertopic['npmi'],
-        'npmi_en_bertopic': coherence_en_bertopic['npmi']
+        'npmi_en_bertopic': coherence_en_bertopic['npmi'],
+        'npmi_af_lda_reference': coherence_af_lda_reference['npmi'],
+        'npmi_en_lda_reference': coherence_en_lda_reference['npmi'],
+        'npmi_af_bertopic_reference': coherence_af_bertopic_reference['npmi'],
+        'npmi_en_bertopic_reference': coherence_en_bertopic_reference['npmi']
       })
       
       # Store topic results
@@ -285,11 +312,15 @@ def main():
         'model': model_name,
         'afrikaans': {
           'lda': coherence_af_lda,
-          'bertopic': coherence_af_bertopic
+          'bertopic': coherence_af_bertopic,
+          'lda_reference': coherence_af_lda_reference,
+          'bertopic_reference': coherence_af_bertopic_reference
         },
         'english': {
           'lda': coherence_en_lda,
-          'bertopic': coherence_en_bertopic
+          'bertopic': coherence_en_bertopic,
+          'lda_reference': coherence_en_lda_reference,
+          'bertopic_reference': coherence_en_bertopic_reference
         }
       })
     else:
@@ -297,48 +328,33 @@ def main():
     
     # Store detailed results
     results['asr_results'][model_name] = {
-      'transcripts': transcripts,
+      'transcripts': {
+        'processed': transcripts[:5],
+        'reference': reference_texts[:5]
+      },
       'wer': model_data['wer'],
-      'translations': translations,
+      'translations': {
+        'processed': processed_translations[:5],
+        'reference': reference_translations[:5]
+      },
       'topic_metrics': {
         'afrikaans': {
           'lda': coherence_af_lda if 'coherence_af_lda' in locals() else {'umass': 0, 'npmi': 0},
-          'bertopic': coherence_af_bertopic if 'coherence_af_bertopic' in locals() else {'umass': 0, 'npmi': 0}
+          'bertopic': coherence_af_bertopic if 'coherence_af_bertopic' in locals() else {'umass': 0, 'npmi': 0},
+          'lda_reference': coherence_af_lda_reference if 'coherence_af_lda_reference' in locals() else {'umass': 0, 'npmi': 0},
+          'bertopic_reference': coherence_af_bertopic_reference if 'coherence_af_bertopic_reference' in locals() else {'umass': 0, 'npmi': 0}
         },
         'english': {
           'lda': coherence_en_lda if 'coherence_en_lda' in locals() else {'umass': 0, 'npmi': 0},
-          'bertopic': coherence_en_bertopic if 'coherence_en_bertopic' in locals() else {'umass': 0, 'npmi': 0}
+          'bertopic': coherence_en_bertopic if 'coherence_en_bertopic' in locals() else {'umass': 0, 'npmi': 0},
+          'lda_reference': coherence_en_lda_reference if 'coherence_en_lda_reference' in locals() else {'umass': 0, 'npmi': 0},
+          'bertopic_reference': coherence_en_bertopic_reference if 'coherence_en_bertopic_reference' in locals() else {'umass': 0, 'npmi': 0}
         }
       }
     }
 
   print(f"\nFinal wer_npmi_data: {wer_npmi_data}")
-  # Create visualizations
-  plot_wer_npmi(wer_npmi_data)
   
-  print("\n" + "="*60)
-  print("ASR AND TOPIC MODELING - SUMMARY REPORT")
-  print("="*60)
-  
-  # ASR Performance
-  print("\nASR PERFORMANCE (WER)")
-  print("-" * 50)
-  for model_name, model_data in results['asr_results'].items():
-    print(f"{model_name}:")
-    print(f"  • ASR WER: {model_data['wer']:.4f}")
-    print("\n  • Afrikaans Topic Coherence:")
-    print(f"    - LDA NPMI: {model_data['topic_metrics']['afrikaans']['lda']['npmi']:.4f}")
-    print(f"    - LDA UMass: {model_data['topic_metrics']['afrikaans']['lda']['umass']:.4f}")
-    print(f"    - BERTopic NPMI: {model_data['topic_metrics']['afrikaans']['bertopic']['npmi']:.4f}")
-    print(f"    - BERTopic UMass: {model_data['topic_metrics']['afrikaans']['bertopic']['umass']:.4f}")
-    print("\n  • English Topic Coherence:")
-    print(f"    - LDA NPMI: {model_data['topic_metrics']['english']['lda']['npmi']:.4f}")
-    print(f"    - LDA UMass: {model_data['topic_metrics']['english']['lda']['umass']:.4f}")
-    print(f"    - BERTopic NPMI: {model_data['topic_metrics']['english']['bertopic']['npmi']:.4f}")
-    print(f"    - BERTopic UMass: {model_data['topic_metrics']['english']['bertopic']['umass']:.4f}")
-    print()
-
-  print("\n🎉 Pipeline execution completed successfully!")
-  print("Visualizations have been saved as 'wer_npmi_analysis.png'")
+  print(json.dumps(results, indent=2, ensure_ascii=False))
 
   return results

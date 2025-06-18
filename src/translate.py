@@ -58,7 +58,7 @@ class Translate:
     translations = []
     print("Translating with NLLB...")
     
-    for i, text in enumerate(texts):
+    for i, text in tqdm(enumerate(texts), total=len(texts), desc="Translating with NLLB"):
       if not text.strip():
         translations.append("")
         continue
@@ -71,9 +71,6 @@ class Translate:
         )
         # The pipeline returns a list of dictionaries, we need the first one
         translations.append(result[0]['translation_text'])
-        
-        if (i + 1) % 10 == 0:
-          print(f"Translated {i + 1}/{len(texts)} texts")
               
       except Exception as e:
         print(f"Error translating text {i}: {e}")
