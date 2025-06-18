@@ -35,8 +35,7 @@ image = (
   "hdbscan",
   "sentencepiece",
   "tqdm",
-  "evaluate",
-  "hbdscan",
+  "evaluate"
 )
   .run_commands(
     "python -c \"from transformers import M2M100Tokenizer, M2M100ForConditionalGeneration; "
