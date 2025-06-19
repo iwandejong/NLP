@@ -52,85 +52,6 @@ VOL_MOUNT_PATH = pathlib.Path("/vol")
 
 HOURS = 60 * 60
 
-def plot_wer_npmi(wer_npmi_data: List[Dict], save_path: str = "wer_npmi_analysis.png"):
-    """Plot WER vs NPMI for different models and topic modeling approaches"""
-    if not wer_npmi_data:
-        print("No WER-NPMI data available to plot")
-        return
-        
-    plt.figure(figsize=(15, 10))
-    
-    # Create DataFrame for easier plotting
-    df = pd.DataFrame(wer_npmi_data)
-    
-    # Verify required columns exist
-    required_columns = ['npmi_af_lda', 'npmi_en_lda', 'npmi_af_bertopic', 'npmi_en_bertopic', 'wer', 'model']
-    if not all(col in df.columns for col in required_columns):
-        print(f"Missing required columns. Available columns: {df.columns.tolist()}")
-        return
-    
-    # Create subplots
-    fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(15, 12))
-    
-    # Plot Afrikaans LDA
-    sns.scatterplot(data=df, x='npmi_af_lda', y='wer', hue='model', style='model', s=100, ax=ax1)
-    ax1.set_title('Afrikaans LDA Coherence vs WER')
-    ax1.set_xlabel('NPMI Coherence Score')
-    ax1.set_ylabel('Word Error Rate (WER)')
-    
-    # Plot English LDA
-    sns.scatterplot(data=df, x='npmi_en_lda', y='wer', hue='model', style='model', s=100, ax=ax2)
-    ax2.set_title('English LDA Coherence vs WER')
-    ax2.set_xlabel('NPMI Coherence Score')
-    ax2.set_ylabel('Word Error Rate (WER)')
-    
-    # Plot Afrikaans BERTopic
-    sns.scatterplot(data=df, x='npmi_af_bertopic', y='wer', hue='model', style='model', s=100, ax=ax3)
-    ax3.set_title('Afrikaans BERTopic Coherence vs WER')
-    ax3.set_xlabel('NPMI Coherence Score')
-    ax3.set_ylabel('Word Error Rate (WER)')
-    
-    # Plot English BERTopic
-    sns.scatterplot(data=df, x='npmi_en_bertopic', y='wer', hue='model', style='model', s=100, ax=ax4)
-    ax4.set_title('English BERTopic Coherence vs WER')
-    ax4.set_xlabel('NPMI Coherence Score')
-    ax4.set_ylabel('Word Error Rate (WER)')
-    
-    # Add correlation coefficients
-    for ax, col in [(ax1, 'npmi_af_lda'), (ax2, 'npmi_en_lda'), 
-                    (ax3, 'npmi_af_bertopic'), (ax4, 'npmi_en_bertopic')]:
-        correlation = df['wer'].corr(df[col])
-        ax.text(0.05, 0.95, f'Correlation: {correlation:.3f}', 
-                transform=ax.transAxes, bbox=dict(facecolor='white', alpha=0.8))
-    
-    plt.tight_layout()
-    plt.savefig(save_path)
-    plt.close()
-
-def plot_translation_quality(translation_data: List[Dict], save_path: str = "translation_quality.png"):
-    """Plot translation quality metrics"""
-    plt.figure(figsize=(12, 6))
-    
-    # Create DataFrame
-    df = pd.DataFrame(translation_data)
-    
-    # Create grouped bar plot
-    df_melted = pd.melt(df, id_vars=['model'], 
-                        value_vars=['wer', 'translation_wer'],
-                        var_name='metric', value_name='score')
-    
-    sns.barplot(data=df_melted, x='model', y='score', hue='metric')
-    
-    plt.xlabel('ASR Model')
-    plt.ylabel('Error Rate')
-    plt.title('ASR and Translation Quality Comparison')
-    plt.xticks(rotation=45)
-    plt.legend(title='Metric', labels=['ASR WER', 'Translation WER'])
-    
-    # Save plot
-    plt.savefig(save_path)
-    plt.close()
-
 @app.function(
   gpu=gpu,
   image=image,
@@ -218,7 +139,6 @@ def main():
     }
   }
 
-  # Process and analyze each model's results
   wer_npmi_data = []
   topic_results = []
 
@@ -238,10 +158,10 @@ def main():
     reference_af = preprocess.preprocess_text(reference_texts, language="af")
     reference_en = preprocess.preprocess_text(reference_translations, language="en")
 
-    print("PROCESSED:", len(processed_af), processed_af[:5])  # Print first 5 processed Afrikaans texts
-    print("PROCESSED:", len(processed_en), processed_en[:5])  # Print first 5 processed English texts
-    print("REF:", len(reference_af), reference_af[:5])  # Print first 5 reference Afrikaans texts
-    print("REF:", len(reference_en), reference_en[:5])  # Print first 5 reference English texts
+    print("PROCESSED:", len(processed_af), processed_af[:5])
+    print("PROCESSED:", len(processed_en), processed_en[:5])
+    print("REF:", len(reference_af), reference_af[:5])
+    print("REF:", len(reference_en), reference_en[:5])
     
     if len(processed_af) > 0 and len(processed_en) > 0:
       # Find optimal number of topics

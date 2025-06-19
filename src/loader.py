@@ -9,15 +9,11 @@ class Loader:
     pass
 
   def load_data(self):
-    """Load Afrikaans data from Common Voice dataset version 17.0"""
     print("Loading Common Voice Afrikaans dataset from Hugging Face...")
     
     try:
-      # Log in to Hugging Face
-      # login(token=os.getenv("HF_TOKEN"))
-      login(token="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")
-      
-      # Load dataset from Hugging Face
+      # hf
+      login(token=os.getenv("HF_TOKEN"))
       dataset = load_dataset("mozilla-foundation/common_voice_17_0", "af", split="validated", trust_remote_code=True)
       
       # Convert to our format

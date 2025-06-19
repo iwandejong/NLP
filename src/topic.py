@@ -18,7 +18,6 @@ class Topic:
     pass
 
   def train_lda(self, texts: List[str], n_topics: int = None) -> Tuple[Optional[LatentDirichletAllocation], Optional[CountVectorizer]]:
-    """Train LDA topic model with improved parameters"""
     print("Training LDA...")
     
     # Remove empty texts and ensure we have valid strings
@@ -59,7 +58,6 @@ class Topic:
       return None, None
         
   def train_bertopic(self, texts: List[str]) -> Optional[BERTopic]:
-    """Train BERTopic model with improved configuration"""
     print("Training BERTopic...")
     
     # Remove empty texts

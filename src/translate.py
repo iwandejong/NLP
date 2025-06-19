@@ -16,7 +16,6 @@ class Translate:
     )
 
   def translate_m2m(self, texts: List[str]) -> List[str]:
-    """Translate texts using M2M-100"""
     if self.m2m_model is None:
       self.load_translation_models()
     
@@ -51,7 +50,6 @@ class Translate:
     return translations
   
   def translate_nllb(self, texts: List[str]) -> List[str]:
-    """Translate texts using NLLB"""
     if self.nllb_translator is None:
       self.load_translation_models()
     
@@ -69,7 +67,7 @@ class Translate:
           src_lang="afr_Latn", 
           tgt_lang="eng_Latn"
         )
-        # The pipeline returns a list of dictionaries, we need the first one
+
         translations.append(result[0]['translation_text'])
               
       except Exception as e:
