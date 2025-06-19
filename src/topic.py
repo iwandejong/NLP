@@ -178,3 +178,72 @@ class Topic:
 
     except Exception as e:
       print(f"Error calculating coherence: {e}")
+
+  def calculate_lda_c_v_coherence(self, texts: List[str], lda_model, vectorizer):
+    if not texts or lda_model is None or vectorizer is None:
+      return {'c_v': 0}
+    
+    try:
+      # Tokenize texts
+      tokenized_texts = [text.split() for text in texts if text.strip()]
+      
+      # Get feature names from vectorizer
+      feature_names = vectorizer.get_feature_names_out()
+      
+      # Get top words for each topic
+      topics = []
+      for topic_idx, topic in tqdm(lda_model.components_, desc="Extracting top words for topics"):
+        top_words_idx = topic.argsort()[:-10-1:-1]  # Reduced to 10 words
+        top_words = [feature_names[i] for i in top_words_idx]
+        topics.append(top_words)
+      
+      # Create dictionary and corpus for coherence calculation
+      dictionary = Dictionary(tokenized_texts)
+      corpus = [dictionary.doc2bow(text) for text in tokenized_texts]
+      
+      # Calculate C_V coherence with improved parameters
+      cm_cv = CoherenceModel(
+        topics=topics,
+        texts=tokenized_texts,
+        dictionary=dictionary,
+        coherence='c_v',
+        processes=-1
+      )
+      cv_score = cm_cv.get_coherence()
+      
+      return {'c_v': cv_score}
+    except Exception as e:
+      print(f"Error calculating C_V coherence: {e}")
+      return {'c_v': 0}
+
+  def optimal_topics(self, texts: List[str], min_topics: int = 2, max_topics: int = 20) -> Dict[int, Dict[str, float]]:
+    coherence_scores = {}
+    
+    for n_topics in tqdm(range(min_topics, max_topics + 1), desc="Evaluating topics"):
+      lda_model, vectorizer = self.train_lda(texts, n_topics)
+      if lda_model is None or vectorizer is None:
+        continue
+      
+      coherence = self.calculate_lda_topic_coherence(texts, lda_model, vectorizer)
+      coherence_scores[n_topics] = coherence
+    
+    # minimise both umass and npmi (close to 0 is better, so take abs)
+    best_n_topics = min(coherence_scores, key=lambda k: (abs(coherence_scores[k]['umass']), abs(coherence_scores[k]['npmi'])))
+    best_scores = coherence_scores[best_n_topics]
+
+    print(f"Optimal number of topics: {best_n_topics} with UMass: {best_scores['umass']}, NPMI: {best_scores['npmi']}")
+
+    return best_n_topics
+
+  def print_lda_topics(self, lda_model, vectorizer, n_words=10):
+    feature_names = vectorizer.get_feature_names_out()
+    for idx, topic in enumerate(lda_model.components_):
+      top_words = [feature_names[i] for i in topic.argsort()[:-n_words - 1:-1]]
+      print(f"LDA Topic {idx + 1}: {', '.join(top_words)}")
+
+  def print_bertopic_topics(self, bertopic_model, n_words=10):
+    topics = bertopic_model.get_topics()
+    for topic_id, words in topics.items():
+      if topic_id != -1:
+        top_words = [word for word, _ in words[:n_words]]
+        print(f"BERTopic {topic_id}: {', '.join(top_words)}")

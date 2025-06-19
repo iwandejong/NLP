@@ -188,30 +188,30 @@ def main():
   reference_texts = [sample['text'] for sample in audio_data]
   
   # Transcribe with different models
-  # whisper_transcripts = asr.transcribe_whisper(audio_data)
-  # m4tv2_transcripts = asr.transcribe_m4tv2(audio_data)
+  whisper_transcripts = asr.transcribe_whisper(audio_data)
+  m4tv2_transcripts = asr.transcribe_m4tv2(audio_data)
   whisper_small_transcripts = asr.transcribe_whisper_small(audio_data)
 
   # Calculate WER for each model
-  # whisper_wer = asr.calculate_wer(reference_texts, whisper_transcripts)
-  # m4tv2_wer = asr.calculate_wer(reference_texts, m4tv2_transcripts)
+  whisper_wer = asr.calculate_wer(reference_texts, whisper_transcripts)
+  m4tv2_wer = asr.calculate_wer(reference_texts, m4tv2_transcripts)
   whisper_small_wer = asr.calculate_wer(reference_texts, whisper_small_transcripts)
 
   print("\nWord Error Rate (WER) Results:")
-  # print(f"Whisper Large v3: {whisper_wer:.4f}")
-  # print(f"Seamless M4T v2: {m4tv2_wer:.4f}")
+  print(f"Whisper Large v3: {whisper_wer:.4f}")
+  print(f"Seamless M4T v2: {m4tv2_wer:.4f}")
   print(f"Whisper Small: {whisper_small_wer:.4f}")
 
   # Store results for each model
   model_results = {
-    # 'whisper_large': {
-    #   'transcripts': whisper_transcripts,
-    #   'wer': whisper_wer
-    # },
-    # 'm4tv2': {
-    #   'transcripts': m4tv2_transcripts,
-    #   'wer': m4tv2_wer
-    # },
+    'whisper_large': {
+      'transcripts': whisper_transcripts,
+      'wer': whisper_wer
+    },
+    'm4tv2': {
+      'transcripts': m4tv2_transcripts,
+      'wer': m4tv2_wer
+    },
     'whisper_small': {
       'transcripts': whisper_small_transcripts,
       'wer': whisper_small_wer
@@ -244,20 +244,51 @@ def main():
     print("REF:", len(reference_en), reference_en[:5])  # Print first 5 reference English texts
     
     if len(processed_af) > 0 and len(processed_en) > 0:
+      # Find optimal number of topics
+      optimal_topics_af = topic.optimal_topics(processed_af)
+      optimal_topics_af_ref = topic.optimal_topics(reference_af)
+      optimal_topics_en = topic.optimal_topics(processed_en)
+      optimal_topics_en_ref = topic.optimal_topics(reference_en)
+
+      print(f"Optimal topics for Afrikaans ({model_name}): {optimal_topics_af}")
+      print(f"Optimal topics for Afrikaans (Reference): {optimal_topics_af_ref}")
+      print(f"Optimal topics for English ({model_name}): {optimal_topics_en}")
+      print(f"Optimal topics for English (Reference): {optimal_topics_en_ref}")
+
       # Train topic models for Afrikaans
-      lda_af, vectorizer_af = topic.train_lda(processed_af, n_topics=5)
+      lda_af, vectorizer_af = topic.train_lda(processed_af, n_topics=optimal_topics_af)
       bertopic_af = topic.train_bertopic(processed_af)
       # Reference
-      lda_af_reference, vectorizer_af_reference = topic.train_lda(reference_af, n_topics=5)
+      lda_af_reference, vectorizer_af_reference = topic.train_lda(reference_af, n_topics=optimal_topics_af_ref)
       bertopic_af_reference = topic.train_bertopic(reference_af)
       
       # Train topic models for English
-      lda_en, vectorizer_en = topic.train_lda(processed_en, n_topics=5)
+      lda_en, vectorizer_en = topic.train_lda(processed_en, n_topics=optimal_topics_en)
       bertopic_en = topic.train_bertopic(processed_en)
       # Reference
-      lda_en_reference, vectorizer_en_reference = topic.train_lda(reference_en, n_topics=5)
+      lda_en_reference, vectorizer_en_reference = topic.train_lda(reference_en, n_topics=optimal_topics_en_ref)
       bertopic_en_reference = topic.train_bertopic(reference_en)
-      
+
+      print("== Afrikaans ==")
+      print("\nLDA (main):")
+      topic.print_lda_topics(lda_af, vectorizer_af)
+      print("\nLDA (reference):")
+      topic.print_lda_topics(lda_af_reference, vectorizer_af_reference)
+      print("\nBERTopic (main):")
+      topic.print_bertopic_topics(bertopic_af)
+      print("\nBERTopic (reference):")
+      topic.print_bertopic_topics(bertopic_af_reference)
+
+      print("\n== English ==")
+      print("\nLDA (main):")
+      topic.print_lda_topics(lda_en, vectorizer_en)
+      print("\nLDA (reference):")
+      topic.print_lda_topics(lda_en_reference, vectorizer_en_reference)
+      print("\nBERTopic (main):")
+      topic.print_bertopic_topics(bertopic_en)
+      print("\nBERTopic (reference):")
+      topic.print_bertopic_topics(bertopic_en_reference)
+
       # Calculate coherence scores for Afrikaans
       if lda_af is not None and vectorizer_af is not None:
         coherence_af_lda = topic.calculate_lda_topic_coherence(processed_af, lda_af, vectorizer_af)
