@@ -16,8 +16,25 @@ This project evaluates automatic speech recognition (ASR) models, translation qu
 - `requirements.txt`: Python dependencies
 
 ## Usage
-1. Install dependencies: `pip install -r requirements.txt`
-2. Run the main pipeline (locally or with Modal):
+1. Set up a virtual environment (recommended)
+  - macOS / Linux:
+    ```bash
+    python3 -m venv venv
+    source venv/bin/activate
+    ```
+  - Windows (Command Prompt):
+    ```bash
+    python -m venv venv
+    venv\Scripts\activate
+    ```
+  - Windows (PowerShell):
+    ```bash
+    python -m venv venv
+    venv\Scripts\Activate.ps1
+    ```
+2. Install dependencies: `pip install -r requirements.txt`
+3. Run the main pipeline:
    ```bash
-   python src/main.py
+   python3 -m src.main-non-modal # local (may require SentencePiece to be installed in order for M2M-100 to work)
+   python3 -m src.main # on Modal [recommended!] (may need to create an account)
    ```
